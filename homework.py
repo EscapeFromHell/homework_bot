@@ -116,7 +116,7 @@ def check_tokens():
         if tk is None:
             tokens = False
             logging.critical(f'Ошибка токена {tk}')
-            return tokens
+        return tokens
 
 
 def main():
