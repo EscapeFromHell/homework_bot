@@ -50,26 +50,29 @@ def send_message(bot, message):
 
 def get_api_answer(current_timestamp):
     """Получение ответа от API."""
-    timestamp = current_timestamp or int(time.time())
-    if not isinstance(timestamp, (float, int)):
-        raise TypeError('Ошибка формата даты')
-    params = {'from_date': timestamp}
-    hw_statuses = requests.get(ENDPOINT, headers=HEADERS, params=params)
-    response = hw_statuses.json()
-    if hw_statuses.status_code == 200:
-        return response
-    else:
-        response_error = response.get('error')
-        response_code = response.get('code')
-        if response_error:
-            logging.error(f'Ошибка при обращении к API {response_error}')
-            raise ResponseError(f'Ошибка при обращении к API {response_error}')
-        elif response_code:
-            logging.error(f'Ошибка при обращении к API {response_code}')
-            raise ResponseError(f'Ошибка при обращении к API {response_code}')
+    try:
+        timestamp = current_timestamp or int(time.time())
+        if not isinstance(timestamp, (float, int)):
+            raise TypeError('Ошибка формата даты')
+        params = {'from_date': timestamp}
+        hw_statuses = requests.get(ENDPOINT, headers=HEADERS, params=params)
+        response = hw_statuses.json()
+        if hw_statuses.status_code == 200:
+            return response
         else:
-            logging.error('Нет ответа от API')
-            raise ResponseError('Нет ответа от API')
+            response_error = response.get('error')
+            response_code = response.get('code')
+            if response_error:
+                logging.error(f'Ошибка при обращении к API {response_error}')
+                raise ResponseError(f'Ошибка запроса API {response_error}')
+            elif response_code:
+                logging.error(f'Ошибка при обращении к API {response_code}')
+                raise ResponseError(f'Ошибка запроса API {response_code}')
+            else:
+                logging.error('Нет ответа от API')
+                raise ResponseError('Нет ответа от API')
+    except Exception as error:
+        raise logging.error(f'Ошибка при обращении к API: {error}')
 
 
 def check_response(response):
@@ -108,25 +111,22 @@ def parse_status(homework):
 def check_tokens():
     """Проверка токенов."""
     tokens = True
-    if PRACTICUM_TOKEN is None:
-        logging.critical('Ошибка токена практикума')
-        tokens = False
-    if TELEGRAM_TOKEN is None:
-        logging.critical('Ошибка токена телеграмма')
-        return False
-    if TELEGRAM_CHAT_ID is None:
-        logging.critical('Ошибка токена чата телеграмма')
-        return False
-    return tokens
+    tokens_check = (PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)
+    for tk in tokens_check:
+        if tk is None:
+            tokens = False
+            logging.critical(f'Ошибка токена {tk}')
+            return tokens
 
 
 def main():
     """Основная логика работы бота."""
-    bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    current_timestamp = int(time.time()) - RETRY_TIME
-    temp_error = None
     if check_tokens() is False:
         raise logging.critical('Ошибка токенов')
+    bot = telegram.Bot(token=TELEGRAM_TOKEN)
+    logger.debug('Бот запущен')
+    current_timestamp = int(time.time()) - RETRY_TIME
+    temp_error = None
     while True:
         try:
             response = get_api_answer(current_timestamp)
