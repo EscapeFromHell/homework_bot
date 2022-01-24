@@ -1,6 +1,8 @@
 import logging
 import os
+import sys
 import time
+from xmlrpc.client import ResponseError
 
 import requests
 import telegram
@@ -24,14 +26,15 @@ HOMEWORK_STATUSES = {
 }
 
 
+path = os.getcwd()
 logging.basicConfig(
     level=logging.DEBUG,
-    filename='main.log',
+    filename=os.path.join(path, 'main.log'),
     filemode='w',
     format='%(asctime)s, %(levelname)s, %(message)s'
 )
 logger = logging.getLogger(__name__)
-handler = logging.StreamHandler()
+handler = logging.StreamHandler(sys.stdout)
 logger.addHandler(handler)
 
 
@@ -48,12 +51,25 @@ def send_message(bot, message):
 def get_api_answer(current_timestamp):
     """Получение ответа от API."""
     timestamp = current_timestamp or int(time.time())
+    if not isinstance(timestamp, (float, int)):
+        raise TypeError('Ошибка формата даты')
     params = {'from_date': timestamp}
     hw_statuses = requests.get(ENDPOINT, headers=HEADERS, params=params)
     response = hw_statuses.json()
-    if hw_statuses.status_code != 200:
-        raise logging.error('Ошибка при обращении к API Практикум.Домашка')
-    return response
+    if hw_statuses.status_code == 200:
+        return response
+    else:
+        response_error = response.get('error')
+        response_code = response.get('code')
+        if response_error:
+            logging.error(f'Ошибка при обращении к API {response_error}')
+            raise ResponseError(f'Ошибка при обращении к API {response_error}')
+        elif response_code:
+            logging.error(f'Ошибка при обращении к API {response_code}')
+            raise ResponseError(f'Ошибка при обращении к API {response_code}')
+        else:
+            logging.error('Нет ответа от API')
+            raise ResponseError('Нет ответа от API')
 
 
 def check_response(response):
@@ -93,10 +109,13 @@ def check_tokens():
     """Проверка токенов."""
     tokens = True
     if PRACTICUM_TOKEN is None:
+        logging.critical('Ошибка токена практикума')
         tokens = False
     if TELEGRAM_TOKEN is None:
+        logging.critical('Ошибка токена телеграмма')
         return False
     if TELEGRAM_CHAT_ID is None:
+        logging.critical('Ошибка токена чата телеграмма')
         return False
     return tokens
 
